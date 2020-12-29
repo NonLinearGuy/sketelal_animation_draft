@@ -1,0 +1,256 @@
+
+<!-- saved from url=(0043)file:///C:/Users/admin/Desktop/example.html -->
+<html><head>
+
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<link rel="stylesheet" href="layout.css">
+</head>
+<body>
+<h2>Skeletal Animation using OpenGL</h2>
+<h3>Introduction</h3>
+<p>3D Animations can really bring our games to life. Objects in 3d world like humans &amp; animals feels more organic when they move their limbs to do certain things like walking, running &amp; attacking. This tutorial is about Skeletal animation which you all have been waiting for. We will first understand the concept thoroughly and then understand the data we need to animate a 3D model using Assimp. I'd recommend you to finish "Model loading" section of this saga as this tutorial code continues from there. You can still understand the concept and implement it in your way. So let's get started.</p>
+<h3>Interpolation</h3>
+<p>To understand how animation works at basic level we need to understand the concept of interpolation. Interpolation can be defined as something happening over time. Like enemy moving from point A to point B in time T i.e Translation happening over time . Enemy smoothly rotate to face player from Rotation A to B i.e Rotation happening over time and A tree is scaling up from size A to size B in time T i.e Scaling happening over time.</p>
+<p>A Simple Interpolation equation used for Translation and Scale looks like this..</p>
+<p style="text-align: center;"><strong>PointB = PointA + Direction * Time</strong></p>
+<p>Looks familiar? ya. It's a ray equation but let's not forget the context here. :p</p>
+<p>&nbsp;</p>
+<h3>Components of An Animated Model : Skin, Bones and Keframes</h3>
+<p>The whole process of animation starts with addition of first component which is Skin in a software like blender or Maya. Skin is nothing but meshes which add visual aspect to the model to tell viewer how it looks like. But If you want to move any mesh then just like real world, you need to add Bones. You can see the images below to understand how it looks in software like blender....</p>
+<p>&nbsp;</p>
+<img src="./img/guest/2020/skeletal_animation/skin.png" alt="skin" width="300" height="300"> <img src="./img/guest/2020/skeletal_animation/bones.png" alt="bones" width="300" height="300"> <img src="./img/guest/2020/skeletal_animation/merged.png" alt="skin and bones" width="300" height="300">
+<p>These bones usually added in heirarchical fashion for characters like humans &amp; animals and reason is pretty obvious. We want parent-child relationship among limbs. For example, If we move our right shoulder then our right bicep, forearm, hand and fingers should move as well. This is how the heirarchy looks like....</p>
+<p>&nbsp;</p>
+<p><img src="./img/guest/2020/skeletal_animation/parent_child.png" alt="" width="853" height="425"></p>
+<p>In the above diagram if you grab Hip bone and move it, all the limbs will be affected by its movement.</p>
+<p>At this point, we are ready to create Animation KeyFrames. Keyframes are poses at different point of time in an animation. You will see in our code will interpolate between these Keyframes to go from one pose to another pose smoothly. Below you can see how poses are created for simple 3 frame jump animation...</p>
+<p><img src="./img/guest/2020/skeletal_animation/poses.gif" alt=""> <img src="./img/guest/2020/skeletal_animation/interpolating.gif" alt="Interpolation bw frames" hspace="20"></p>
+<p>&nbsp;</p>
+<h3>How Assimp holds animation data</h3>
+<p>We are almost there to the code part but first we need to understand how assimp holds imported animation data. Look at the diagram below..</p>
+<p><img src="./img/guest/2020/skeletal_animation/assimp1.jpeg" alt="" width="710" height="800"></p>
+<p>Just like "Model loading" section. We will start with aiScene pointer which holds pointer to RootNode and look what do we have here, an array of Animations. This array holds aiAnimation contains informations like how long is an Animation which is represented here as TicksPerSecond and if you remember from last section that animation has keyframes. Similary, aiAnimation contains channels. This array contains all the bones and their keyframes which are going to engaged in this Animation. You will find 3 types of keys to interpolate between here, Translations,Rotations &amp; Scale.</p>
+<p>Alright, there's one last thing we need to understand and we are good to go for writing some code.&nbsp;</p>
+<p>&nbsp;</p>
+<h3>Influence of multiple bones on vertices</h3>
+<p>When we curl our forearm and we see our biceps muscle pop up. We can also say that forearm bone transformation is affecting vertices on our biceps. Similary, there could be multiple bones affecting a single vertex in a mesh. For characters like solid metal robots all forearm vertices will be affected by forearm bone but for characters like humans, animals etc, there could be upto 4 bones which can affect a vertex.&nbsp; Let's see how assimps stores that information...</p>
+<p>&nbsp;</p>
+<p><img src="./img/guest/2020/skeletal_animation/assimp2.jpeg" alt="" width="760" height="860"></p>
+<p>&nbsp;</p>
+<p>We start with aiScene object again which contains an array of all aiMeshes. Each aiMesh object has an array of aiBone and each aiBone has the information we need, which is how much influence this aiBone will have on set of vertices on the mesh. aiBone contains the name of the bone, an array of aiVertexWeight which basically tells how much weight on what vertex in vertices array. Now we have one more member here which is offsetMatrix. Vertices should animate in bone space. This matrix is used to transform vertices from local space (T pose) to this bone's space. Don't worry. This will make more sense later on when we will see this in action.</p>
+<p>&nbsp;</p>
+<h3>Finally! Let's code.</h3>
+<p>Thank you for making it this far. We will start with directly looking at the end result which is our final shader code. This will give us good sense how its gonna end up like...</p>
+<pre><code>
+#version 430 core
+
+layout(location = 0) in vec3 pos;
+layout(location = 1) in vec3 norm;
+layout(location = 2) in vec2 tex;
+layout(location = 3) in ivec4 boneIds; 
+layout(location = 4) in vec4 weights;
+
+uniform mat4 projection;
+uniform mat4 view;
+uniform mat4 model;
+
+
+const int MAX_BONES = 100;
+const int MAX_BONE_INFLUENCE = 4;
+uniform mat4 finalBonesMatrices[MAX_BONES];
+
+out vec2 TexCoords;
+
+void main()
+{
+   vec4 totalPosition = vec4(0.0f);
+   for(int i = 0 ; i &lt; MAX_BONE_INFLUENCE ; i++){
+   if(boneIds[i] == -1) continue;
+   if(boneIds[i] &gt;= MAX_JOINTS){
+		totalPosition = vec4(pos,1.0f);
+		break;
+   }
+	vec4 localPosition = finalBoneMatrices[boneIds[i]] * vec4(pos,1.0f);
+	totalPosition += localPosition * weights[i];
+	vec3 localNormal = mat3(finalBoneMatrices[boneIds[i]]) * norm;
+   }
+	
+    mat4 viewModel = view * model;
+    gl_Position =  projection * viewModel * totalPosition;
+	TexCoords = tex;
+}
+
+</code></pre>
+<p>&nbsp;Starting from the top you see two new attributes layout declaration. First <code>boneIds</code> and second is <code>weights</code>. To understand how they get involved look at the <code>finalBoneMatrices</code> array. This array contains all the bones transformation during interpolating between different poses in a frame.&nbsp;&nbsp;<code>boneIds</code> contains Indices to bones which will affect <code>pos</code> vertex which is being processed and <code> weights </code> will decide by how much weight each bone transformation matrix will influence the vertex <code>pos</code>. This happens in a for loop above. Now let's add support in our <code>Mesh</code> class for bone weights first..</p>
+<pre><code>
+#define MAX_BONE_INFLUENCE 4
+
+struct Vertex {
+    // position
+    glm::vec3 Position;
+    // normal
+    glm::vec3 Normal;
+    // texCoords
+    glm::vec2 TexCoords;
+    
+	//bone indexes which will influence this vertex
+	int m_BoneIDs[MAX_BONE_INFLUENCE;
+
+	//weights from each bone
+	float m_Weights[MAX_BONE_INFLUENCE];
+
+};
+</code></pre>
+<p>We have added two new attributes for <code>Vertex</code>, just like we saw in our shader. Now's let's load them in GPU buffers just like other attributes in our <code>Mesh::setupMesh </code> function...</p>
+<pre><code> 
+
+class Mesh
+{
+	...
+    
+    void setupMesh()
+    {
+    	....
+        
+        // ids
+		glEnableVertexAttribArray(3);
+		glVertexAttribIPointer(3, 4, GL_INT, sizeof(Vertex), (void*)offsetof(Vertex, m_BoneIDs));
+
+		// weights
+		glEnableVertexAttribArray(4);
+		glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, m_Weights));
+        
+        ...
+    }
+    
+    ...
+}
+
+</code></pre>
+<p>Just like before, except now we have added 3 and 4 layout locations for <code> boneIds</code> and <code>weights</code>. One imporant thing to notice here is how we are passing data for <code>boneIds</code>. We are using <code>glVertexAttribIPointer</code> and we passed GL_INT as third parameter.&nbsp;</p>
+<p>Now we can extract bone weight information from assimp data structure. Let's make some changes in Model class...</p>
+<p>&nbsp;</p>
+<pre><code>
+class Model 
+{
+private:
+<br>...
+	std::map&lt;string, BoneInfo&gt; m_OffsetMatMap;
+	int m_BoneCount = 0;
+    
+...<br>
+        void SetVertexBoneDataToDefault(Vertex&amp; vertex)
+	{
+		for (int i = 0; i &lt; MAX_BONE_WEIGHTS; i++)
+		{
+			vertex.m_BoneIDs[i] = -1;
+			vertex.m_Weights[i] = 0.0f;
+		}
+	}
+
+
+	Mesh processMesh(aiMesh* mesh, const aiScene* scene)
+	{
+		vector vertices;
+		vector indices;
+		vector textures;
+
+		for (unsigned int i = 0; i &lt; mesh-&gt;mNumVertices; i++)
+		{
+			Vertex vertex;
+			<br>                        SetVertexBoneDataToDefault(vertex);
+			<br>                        vertex.Position = AssimpGLMHelpers::GetGLMVec(mesh-&gt;mVertices[i]);
+			vertex.Normal = AssimpGLMHelpers::GetGLMVec(mesh-&gt;mNormals[i]);
+			
+			if (mesh-&gt;mTextureCoords[0])
+			{
+				glm::vec2 vec;
+				vec.x = mesh-&gt;mTextureCoords[0][i].x;
+				vec.y = mesh-&gt;mTextureCoords[0][i].y;
+				vertex.TexCoords = vec;
+			}
+			else
+				vertex.TexCoords = glm::vec2(0.0f, 0.0f);
+
+			vertices.push_back(vertex);
+		}
+	...<br>
+		ExtractBoneWeightForVertices(vertices,mesh,scene);
+
+		return Mesh(vertices, indices, textures);
+	}
+
+	void SetVertexBoneData(Vertex&amp; vertex, int boneID, float weight)
+	{
+		for (int i = 0; i &lt; MAX_BONE_WEIGHTS; ++i)
+		{
+			if (vertex.m_BoneIDs[i] &lt; 0)
+			{
+				vertex.m_Weights[i] = weight;
+				vertex.m_BoneIDs[i] = boneID;
+				break;
+			}
+		}
+	}
+
+
+	void ExtractBoneWeightForVertices(std::vector&amp; vertices, aiMesh* mesh, const aiScene* scene)
+	{
+		auto&amp; boneInfoMap = m_OffsetMatMap;
+		int&amp; boneCount = m_BoneCount;
+
+		for (int boneIndex = 0; boneIndex &lt; mesh-&gt;mNumBones; ++boneIndex)
+		{
+			int boneID = -1;
+			std::string boneName = mesh-&gt;mBones[boneIndex]-&gt;mName.C_Str();
+			if (boneInfoMap.find(boneName) == boneInfoMap.end())
+			{
+				BoneInfo newBoneInfo;
+				newBoneInfo.id = boneCount;
+				newBoneInfo.offset = AssimpGLMHelpers::ConvertMatrixToGLMFormat(mesh-&gt;mBones[boneIndex]-&gt;mOffsetMatrix);
+				boneInfoMap[boneName] = newBoneInfo;
+				boneID = boneCount;
+				boneCount++;
+			}
+			else
+			{
+				boneID = boneInfoMap[boneName].id;
+			}
+			assert(boneID != -1);
+			auto weights = mesh-&gt;mBones[boneIndex]-&gt;mWeights;
+			int numWeights = mesh-&gt;mBones[boneIndex]-&gt;mNumWeights;
+
+			for (int weightIndex = 0; weightIndex &lt; numWeights; ++weightIndex)
+			{
+				int vertexId = weights[weightIndex].mVertexId;
+				float weight = weights[weightIndex].mWeight;
+				assert(vertexId &lt;= vertices.size());
+				SetVertexBoneData(vertices[vertexId], boneID, weight);
+			}
+		}
+	}
+<br>     .......
+
+};
+</code></pre>
+<p>As we saw in the diagram earlier that each aiMesh contains all the aiBones which are associated with the aiMesh, The whole process of bone weights extraction starts from <code> processMesh </code> function. For each loop iteration we are setting vertex bone weight data to its default values by calling function <code>SetVertexBoneDataToDefault</code>. Just before returning the <code>new Mesh</code> we call <code>ExtractBoneWeightData</code>. This function utilises the <code>std::map<string,boneinfo></string,boneinfo></code>  we declared on top. This map stores <code> offsetMatrix</code> and <code>boneIndex</code> and will use bone name as its key.</p>
+    
+<p> Then we run a for loop for each <code>aiBone</code> and check if we have already extracted information for it by finiding it in the <code>boneInfoMap</code>. If we couldn't find it then its a new bone and we create new <code>BoneInfo</code> with an id and store it associated <code>mOffsetMatrix</code> to it. Then we create a new <code> std::pair </code> with bone's name as key and newly created <code>BoneInfo</code> as Value and Increment the <code>boneCount</code> counter to create id for next bone.
+    </p>
+    <p>We have extracted the offsetMatrix for the bone and now we will simply iterate over all the weights in this bone and extract all vertices indices which will be influenced by this bone along with their weight and call <code>SetVertexBoneData</code> to fill up <code>Vertex.boneIds</code> and <code>Vertex.weights</code> with extracted information. Phew! Let's take a coffee break. </p>  
+    
+<h3>Bone,Animation &amp; Animator classes</h3>
+    
+Here's high level view of classes..
+    
+    
+<p><img src="./img/guest/2020/skeletal_animation/bird_eye_view.png" alt=""></p>
+    
+<p>    Let me break it down the flow to you, We will first load all the <code>Animation</code> and give it to<code>Model</code> and then we can tell model class to play an animation. We will update this animation flow with the help of <code>Update</code> method in <code>Model</code> every frame. <code>Model</code> will then ask <code>Animator</code> to interpolate between key frames and calculate final transformation matrices for each <code>Bone</code> engaged in the <code>Animation</code>. Then we will take the array of final transformations of all bones and give it to our shader to influence vertex positions,rotations and scale with different weights for different bones. Let's get it working now...
+    </p>  
+    
+  
+    
+
+    
+</body></html>
