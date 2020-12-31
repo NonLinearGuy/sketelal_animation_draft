@@ -2,19 +2,24 @@
 <!-- saved from url=(0043)file:///C:/Users/admin/Desktop/example.html -->
 <html><head>
 
-<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
-<link rel="stylesheet" href="layout.css">
-</head>
-<body>
-<h2>Skeletal Animation using OpenGL</h2>
-<h3>Introduction</h3>
-<p>3D Animations can really bring our games to life. Objects in 3d world like humans &amp; animals feels more organic when they move their limbs to do certain things like walking, running &amp; attacking. This tutorial is about Skeletal animation which you all have been waiting for. We will first understand the concept thoroughly and then understand the data we need to animate a 3D model using Assimp. I'd recommend you to finish "Model loading" section of this saga as this tutorial code continues from there. You can still understand the concept and implement it in your way. So let's get started.</p>
-<h3>Interpolation</h3>
-<p>To understand how animation works at basic level we need to understand the concept of interpolation. Interpolation can be defined as something happening over time. Like enemy moving from point A to point B in time T i.e Translation happening over time . Enemy smoothly rotate to face player from Rotation A to B i.e Rotation happening over time and A tree is scaling up from size A to size B in time T i.e Scaling happening over time.</p>
-<p>A Simple Interpolation equation used for Translation and Scale looks like this..</p>
-<p style="text-align: center;"><strong>PointB = PointA + Direction * Time</strong></p>
-<p>Looks familiar? ya. It's a ray equation but let's not forget the context here. :p</p>
-<p>&nbsp;</p>
+	<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+	<link rel="stylesheet" href="layout.css">
+	</head>
+	<body>
+	<h2>Skeletal Animation using OpenGL</h2>
+	<h3>Introduction</h3>
+	<p>3D Animations can really bring our games to life. Objects in 3d world like humans &amp; animals feels more organic when they move their limbs to do certain things like walking, running &amp; attacking. This tutorial is about Skeletal animation which you all have been waiting for. We will first understand the concept thoroughly and then understand the data we need to animate a 3D model using Assimp. I'd recommend you to finish "Model loading" section of this saga as this tutorial code continues from there. You can still understand the concept and implement it in your way. So let's get started.</p>
+	<h3>Interpolation</h3>
+	<p>To understand how animation works at basic level we need to understand the concept of interpolation. Interpolation can be defined as something happening over time. Like enemy moving from point A to point B in time T i.e Translation happening over time . Enemy smoothly rotate to face player from Rotation A to B i.e Rotation happening over time and A tree is scaling up from size A to size B in time T i.e Scaling happening over time.</p>
+	<p>A Simple Interpolation equation used for Translation and Scale looks like this..</p>
+	<p style="text-align: center;"><strong>VectorEnd = VectorStart + (VectorEnd - VectorStart) * Time</strong></p>
+	<p>Looks Familiar? Yes. This is a ray equation but in animation context widely known as Linear Interpolation Equation or Lerp. For Rotation we cannot use Vector. 
+		The reason for that is if we went ahead and tried to use linear interpolation Equation on a vector of X(Pitch),Y(Yaw) & Z(Roll), The interpolation won't be linear. You will encounter 
+		weird issues like Gimble Lock(See references section below to learn about it). To avoid this issue we use Quaternion for rotations. Quaternion provides something called Spherical Interpolation or 
+		Slerp which gives the same result as Lerp but for two Rotations A & B. 
+		I won't explain how the equation works because its out of the scope for now. You can surely checkout References section below to 
+		understand more. 
+	</p>
 <h3>Components of An Animated Model : Skin, Bones and Keframes</h3>
 <p>The whole process of animation starts with addition of first component which is Skin in a software like blender or Maya. Skin is nothing but meshes which add visual aspect to the model to tell viewer how it looks like. But If you want to move any mesh then just like real world, you need to add Bones. You can see the images below to understand how it looks in software like blender....</p>
 <p>&nbsp;</p>
