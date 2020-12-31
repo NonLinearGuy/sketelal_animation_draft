@@ -118,9 +118,10 @@ tr:nth-child(even) {
     background-color: #DDD;
 }
 
-pre code function  {
+code   {
      text-decoration: none;
-     border-bottom: 1px solid #343434;
+     color: #252525;
+
 }
 
 /* Elements */
