@@ -79,10 +79,17 @@
 	how much influence this <code>aiBone</code> will have on set of vertices on the mesh. 
 	aiBone contains the name of the bone, an array of <code>aiVertexWeight</code> which basically 
 	tells us how much influence this <code>aiBone</code> will have on what vertices on the mesh.  
-	Now we have one more member here which is offsetMatrix. 
-	Vertices should be in bone space when they are being animated.
-	 This matrix is used to transform vertices from local space (T pose) to bone's space. 
-	 Don't worry. This will make more sense later on when we will see this in action.</p>
+	Now we have one more member of <code>aiBone</code> which is offsetMatrix. It's a 4x4 matrix
+	used to transform vertices from model space to their bone space. 
+	 You can see this in action in images below....</p>
+	 
+		  <img src="./img/guest/2020/skeletal_animation/mesh_space.png" alt="Mesh Space" style="width:50%">
+		  <img src="./img/guest/2020/skeletal_animation/bone_space.png" alt="Bone Space" style="width:50%">
+	 <p>
+		 When vertices are in bone space they will be transformed relative to their bone
+		  as they are supposed to. You will soon see this in action
+		 in code.
+	 </p>
 <p>&nbsp;</p>
 <h3>Finally! Let's code.</h3>
 <p>Thank you for making it this far. We will start with directly looking at the end result which is our final vertex 
