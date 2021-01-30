@@ -134,13 +134,14 @@ void main()
 }
 
 </code></pre>
-<p>&nbsp;Fragment shader remains 
-	the same from "Model Loading" Section. Starting from the top you see two new attributes layout declaration. First <code>boneIds</code> and second is <code>weights</code>. To understand how
-	 they get involved look at the <code>finalBonesMatrices</code> array. This array contains all the bones 
-	 transformations matrices after interpolations in the single render loop.
-	 &nbsp;&nbsp;<code>boneIds</code> contains 4 indices which is used to read bone 
-	 matrices from <code>finalBonesMatrices</code> and transform <code>pos</code> vertex and <code> weights </code> 
-	 will decide how much influence each bone matrix will have on it. This happens inside <code> for </code> loop above.
+<p>Fragment shader remains 
+	the same from the <a href="https://learnopengl.com/Model-Loading/Model">this tutorial.</a> 
+	Starting from the top you see two new attributes layout declaration. 
+	First <code>boneIds</code> and second is <code>weights</code>. we also have 
+	a uniform array <code>finalBonesMatrices</code> which stores transformations of all bones.
+	 &nbsp;&nbsp;<code>boneIds</code> contains indices which are used to read the <code>finalBonesMatrices</code>
+	 array and apply those transformation to <code>pos</code> vertex with their respective weights
+	 stored in <code> weights </code> array. This happens inside <code> for </code> loop above.
 	   Now let's add support in our <code>Mesh</code> class for bone weights first..</p>
 <pre><code>
 #define MAX_BONE_INFLUENCE 4
@@ -161,7 +162,8 @@ struct Vertex {
 
 };
 </code></pre>
-<p>We have added two new attributes for <code>Vertex</code>, just like we saw in our shader. Now's let's load them in GPU buffers just like other attributes in our <code>Mesh::setupMesh </code> function...</p>
+<p>We have added two new attributes for the <code>Vertex</code>, just like we saw in our vertex shader. 
+	Now's let's load them in GPU buffers just like other attributes in our <code>Mesh::setupMesh </code> function...</p>
 <pre><code> 
 
 class Mesh
@@ -187,17 +189,17 @@ class Mesh
 }
 
 </code></pre>
-<p>Just like before, except now we have added 3 and 4 layout locations for <code> boneIds</code> and <code>weights</code>. One imporant thing to notice here is how we are passing data for <code>boneIds</code>. We are using <code>glVertexAttribIPointer</code> and we passed GL_INT as third parameter.&nbsp;</p>
-<p>Now we can extract bone weight information from assimp data structure. Let's make some changes in Model class...</p>
+<p>Just like before, except now we have added 3 and 4 layout location ids for <code> boneIds</code> and <code>weights</code>. One imporant thing to notice here is how we are passing data for <code>boneIds</code>. We are using <code>glVertexAttribIPointer</code> and we passed GL_INT as third parameter.&nbsp;</p>
+<p>Now we can extract the bone-weight information from the assimp data structure. Let's make some changes in Model class...</p>
 
 <pre><code>
 
 struct BoneInfo
 {
-	/*id as index to store bone final transformation to finalBoneMatrices*/
+	/*id is index in finalBoneMatrices*/
 	int id;
 
-	/*offset matrix transforms bone from local space to bone space*/
+	/*offset matrix transforms vertex from model space to bone space*/
 	glm::mat4 offset;
 
 };
@@ -211,7 +213,7 @@ class Model
 {
 private:
 <br>...
-	std::map&lt;string, BoneInfo&gt; m_OffsetMatMap; //
+	std::map&lt;string, BoneInfo&gt; m_BoneInfoMap; //
 	int m_BoneCounter = 0;
     
 ...<br>
@@ -276,18 +278,18 @@ private:
 		{
 			int boneID = -1;
 			std::string boneName = mesh-&gt;mBones[boneIndex]-&gt;mName.C_Str();
-			if (m_OffsetMatMap.find(boneName) == m_OffsetMatMap.end())
+			if (m_BoneInfoMap.find(boneName) == m_BoneInfoMap.end())
 			{
 				BoneInfo newBoneInfo;
 				newBoneInfo.id = m_BoneCounter;
 				newBoneInfo.offset = AssimpGLMHelpers::ConvertMatrixToGLMFormat(mesh-&gt;mBones[boneIndex]-&gt;mOffsetMatrix);
-				m_OffsetMatMap[boneName] = newBoneInfo;
+				m_BoneInfoMap[boneName] = newBoneInfo;
 				boneID = m_BoneCounter;
 				m_BoneCounter++;
 			}
 			else
 			{
-				boneID = m_OffsetMatMap[boneName].id;
+				boneID = m_BoneInfoMap[boneName].id;
 			}
 			assert(boneID != -1);
 			auto weights = mesh-&gt;mBones[boneIndex]-&gt;mWeights;
@@ -306,21 +308,30 @@ private:
 
 };
 </code></pre>
-<p>We start by declaring a map <code>m_OffsetMatMap</code> and a counter <code>m_BoneCounter</code> 
+<p>We start by declaring a map <code>m_BoneInfoMap</code> and a counter <code>m_BoneCounter</code> 
 	which will be incremented as soon as we read a new bone.
-	 we saw in the diagram earlier that each aiMesh contains all the aiBones which are associated with the aiMesh, 
-	 The whole process of bone weights extraction starts from <code> processMesh </code> 
-	function. For each loop iteration we are setting vertex bone weight data to its default values by calling function <code>SetVertexBoneDataToDefault</code>. 
-	Just before returning the <code>new Mesh</code> we call <code>ExtractBoneWeightData</code>. In <code>ExtractBoneWeightData</code> we run a for loop for each <code>aiBone</code> and check if we have already extracted information 
-	for it by finiding it in the <code>m_OffsetMatMap</code>. 
-	If we couldn't find it then its a new bone and we create new <code>BoneInfo</code> with an id and store its associated <code>mOffsetMatrix</code> to it. Then we assign this new <code>BoneInfo</code>
-	 as bone's name as key and and then we increment the <code>m_BoneCounter</code> counter to create an id for next bone. In case we find this bone in our map then that means this bone affects vertices of mesh out of 
-	 its scope. So we take its Id and proceed further to know which vertices it affects. </p>
+	 we saw in the diagram earlier that each <code>aiMesh</code> contains all 
+	 aiBones which are associated with the <code>aiMesh</code>. 
+	 The whole process of the bone-weight extraction starts from the 
+	 <code> processMesh </code> 
+	function. For each loop iteration we are setting <code>m_BoneIDs</code> and <code>m_Weights</code> to 
+	their default values 
+	by calling function <code>SetVertexBoneDataToDefault</code>. 
+	Just before the <code>processMesh</code> function ends, we call the 
+	<code>ExtractBoneWeightData</code>. In the <code>ExtractBoneWeightData</code> we run 
+	a for loop for each <code>aiBone</code> and check if this bone already exists in the <code>m_BoneInfoMap</code>. 
+	If we couldn't find it then it's considered a new bone and we create new <code>BoneInfo</code> 
+	with an id and store its associated <code>mOffsetMatrix</code> to it. Then we store this new <code>BoneInfo</code>
+	 in <code>m_BoneInfoMap</code> and then we increment the <code>m_BoneCounter</code> counter to create 
+	 an id for next bone. In case we find the bone name in <code>m_BoneInfoMap</code> then 
+	 that means this bone affects vertices of mesh out of 
+	 its scope. So we take it's Id and proceed further to know which vertices it affects. </p>
 	 
 	 <p> One thing to notice that we are calling <code>AssimpGLMHelpers::ConvertMatrixToGLMFormat</code>. 
-	 Assimp store its matrix data in different format than GLM so this function just give us our matrix in GLM format.
+	 Assimp store its matrix data in different format than GLM so this function just gives us our matrix in GLM format.
     </p>
-	<p>We have extracted the offsetMatrix for the bone and now we will simply iterate its <code>aiVertexWeight</code>array and extract all vertices indices which will be influenced by this bone along with their 
+	<p>We have extracted the offsetMatrix for the bone and now we will simply iterate its <code>aiVertexWeight</code>array 
+		and extract all vertices indices which will be influenced by this bone along with their 
 		respective weights and call <code>SetVertexBoneData</code> to fill up <code>Vertex.boneIds</code> and <code>Vertex.weights</code> with extracted information. </p>
 		
 		<p>Phew! You deserve a coffee break at this point. </p>  
@@ -329,7 +340,7 @@ private:
     <p>&nbsp;</p>
 <p>Here's high level view of classes..</p>
 
-<p><img src="./img/guest/2020/skeletal_animation/bird_eye_view.png" alt=""></p>
+<p><img src="./img/guest/2020/skeletal_animation/bird_eye_view.png" alt="" width="100" height="100"></p>
 
 <p>  Let us remind ourselves what we are trying to achieve. For each rendering frame we want to interpolate all bones in heirarchy smoothly and get their final transformations matrices which will be supplied to shader
 	uniform <code>finalBonesMatrices</code>.
@@ -555,9 +566,9 @@ private:
 	<p><b> 	float midWayLength = animationTime - lastTimeStamp; </b></p>
 	<p><b> float framesDiff = nextTimeStamp - lastTimeStamp;</b></p>
 		<p><b> scaleFactor = midWayLength / framesDiff; </b></p>
+	<p></p>
    </p>
     Let's move on to <code><b>Animation</b></code> class now...
-   
    <pre><code>
 
 struct AssimpNodeData
@@ -618,9 +629,10 @@ private:
 	{
 		int size = animation->mNumChannels;
 
-		auto& boneInfoMap = model.GetOffsetMatMap();
-		int& boneCount = model.GetBoneCount();
+		auto& boneInfoMap = model.GetBoneInfoMap();//getting m_BoneInfoMap from Model class
+		int& boneCount = model.GetBoneCount(); //getting the m_BoneCounter from Model class
 
+		//reading channels(bones engaged in an animation and their keyframes)
 		for (int i = 0; i < size; i++)
 		{
 			auto channel = animation->mChannels[i];
@@ -670,7 +682,7 @@ We then call <code>ReadHeirarchyData</code> which replicates <code>aiNode</code>
 </p>
 
 <p> Then we call a function called <code>ReadMissingBones</code>. I had to write this function because sometimes when I loaded FBX model separately, it had some bones missing and I found those missing bones in
-the animation file. This function reads the missing bones information and stores their information in <code>m_OffsetMatMap</code> of <code>Model</code> and saves a reference of <code>m_OffsetMatMap</code> locally in
+the animation file. This function reads the missing bones information and stores their information in <code>m_BoneInfoMap</code> of <code>Model</code> and saves a reference of <code>m_BoneInfoMap</code> locally in
 m_BoneInfoMap.</p> 
 
 <p>And we have our animation ready. Now let's look at our final stage, The Animator class...</p>
@@ -687,10 +699,10 @@ m_BoneInfoMap.</p>
 			m_CurrentTime = 0.0;
 			m_CurrentAnimation = currentAnimation;
 
-			m_FinalBoneTransforms.reserve(100);
+			m_FinalBoneMatrices.reserve(100);
 
 			for (int i = 0; i < 100; i++)
-				m_FinalBoneTransforms.push_back(glm::mat4(1.0f));
+				m_FinalBoneMatrices.push_back(glm::mat4(1.0f));
 		}
 	
 		void Animator::UpdateAnimation(float dt)
@@ -730,20 +742,20 @@ m_BoneInfoMap.</p>
 			{
 				int index = boneInfoMap[nodeName].id;
 				glm::mat4 offset = boneInfoMap[nodeName].offset;
-				m_FinalBoneTransforms[index] = globalTransformation * offset;
+				m_FinalBoneMatrices[index] = globalTransformation * offset;
 			}
 	
 			for (int i = 0; i < node->childrenCount; i++)
 				CalculateBoneTransform(&node->children[i], globalTransformation);
 		}
 	
-		std::vector<glm::mat4> GetFinalBoneTransforms() 
+		std::vector<glm::mat4> GetFinalBoneMatrices() 
 		{ 
-			return m_FinalBoneTransforms;  
+			return m_FinalBoneMatrices;  
 		}
 		
 	private:
-		std::vector<glm::mat4> m_FinalBoneTransforms;
+		std::vector<glm::mat4> m_FinalBoneMatrices;
 		Animation* m_CurrentAnimation;
 		float m_CurrentTime;
 		float m_DeltaTime;
@@ -754,15 +766,22 @@ m_BoneInfoMap.</p>
 
 <p>
 
-	Animator constructor takes an animation to play and then it proceeds to reset the animation time <code>m_CurrentTime</code> to 0. It also initializes <code>m_FinalBoneTransforms</code> 
-	which is a <code>std::vector<glm::mat4></code>.  The main point of attention here is <code>UpdateAnimation(float deltaTime)</code> function. It advances the <code>m_CurrentTime</code> with rate of 
-	<code>m_TicksPerSecond</code> and then calls <code>CalculateBoneTransform</code> function. We will pass two arguments in the start, first is the <code>m_RootNode</code> of <code>m_CurrentAnimation</code>
+	<code>Animator</code> constructor takes an animation to play and
+	 then it proceeds to reset the animation time <code>m_CurrentTime</code> to 0. 
+	 It also initializes <code>m_FinalBoneMatrices</code> 
+	which is a <code>std::vector<glm::mat4></code>. 
+	 The main point of attention here is <code>UpdateAnimation(float deltaTime)</code> function.
+	  It advances the <code>m_CurrentTime</code> with rate of 
+	<code>m_TicksPerSecond</code> and then calls the <code>CalculateBoneTransform</code> function.
+	 We will pass two arguments in the start, first is the <code>m_RootNode</code> of <code>m_CurrentAnimation</code>
 	and second is an identity matrix passed as <code>parentTransform</code> This function then check if <code>m_RootNode</code>s bone is engaged in this animation by finding it in <code>m_Bones</code> array of <code>Animation</code>. 
 	If bone is found then it calls <code>Bone.Update()</code> function which interpolates all bones and return local bone transform matrix to
-	 <code>nodeTransform</code>. But this is local space matrix and will move bone around origin if passed in shaders. So we multiply this <code>nodeTransform</code> with <code>parentTransform</code> and 
-	 we store the result in <code>globalTransformation</code>. This would be enough but vertices are still in default local space in T Pose. This is where we 
-		need to use offset matrix. we find offset matrix in <code>m_BoneInfoMap</code> and then multiply it 
-		with <code>globalTransfromMatrix</code>. We will also get the id index which will be used to write final transformation of this bone to m_FinalBoneTransforms. 
+	 <code>nodeTransform</code>. 
+	 But this is local space matrix and will move bone around origin if passed in shaders. So we multiply this <code>nodeTransform</code> with <code>parentTransform</code> and 
+	 we store the result in <code>globalTransformation</code>. This would be enough but vertices are still in default model space. 
+	 we find offset matrix in <code>m_BoneInfoMap</code> and then multiply it 
+		with <code>globalTransfromMatrix</code>. 
+		We will also get the id index which will be used to write final transformation of this bone to m_FinalBoneMatrices. 
 	 </p>
 
 	 <p>
@@ -823,7 +842,7 @@ int main()
 		ourShader.setMat4("projection", projection);
 		ourShader.setMat4("view", view);
 
-		auto transforms = animator.GetFinalBoneTransforms();
+		auto transforms = animator.GetFinalBoneMatrices();
 		for (int i = 0; i < transforms.size(); ++i)
 			ourShader.setMat4("finalBonesTransformations[" + std::to_string(i) + "]", transforms[i]);
 
@@ -855,11 +874,236 @@ int main()
 	Then we create our <code>Animator</code> object by passing it the created <code>Animation</code>. In render loop we then update our <code>Animator</code>, take the 
 	final bone transformations and give it to shaders. Here's the output we all have been waiting for...
 
-
 </p>
 
 <img src="./img/guest/2020/skeletal_animation/output.gif" alt="output">
-    
+
+<p> Download the model used from <a href="https://learnopengl.com/Model-Loading/Assimp">Here.</a> Note that animations
+and meshes are baked in single DAE(collada) file. </p>
+	
+<h3> Further Reading</h3>
+
+<ul>
+	<li><a href="http://www.songho.ca/math/quaternion/quaternion.html" target="_blank">An article by songho to understand
+	quaternions in depth</li>
+	<li><a href="http://ogldev.atspace.co.uk/www/tutorial38/tutorial38.html" target="_blank">Skeletal animation with Assimp 
+		by OGL Dev</li>
+	<li><a href="https://youtu.be/f3Cr8Yx3GGA" target="_blank">Skeletal animation with OpenGL and java by Thin Matrix</li>
+	<li><a href="https://www.gamasutra.com/view/feature/131686/rotating_objects_using_quaternions.php" target="_blank">An awesome gamasutra article for why quaternions are used
+		for rotations in games 
+   </li>	
+</ul>
+
 </body>
+
+<p>full main.cpp source code</p>
+<pre><code>
+
+	#include <glad/glad.h>
+	#include <GLFW/glfw3.h>
+	
+	#include <glm/glm.hpp>
+	#include <glm/gtc/matrix_transform.hpp>
+	#include <glm/gtc/type_ptr.hpp>
+	
+	#include <learnopengl/filesystem.h>
+	#include <learnopengl/shader_m.h>
+	#include <learnopengl/camera.h>
+	#include"animator.h"
+	#include <learnopengl/model.h>
+	
+	
+	
+	#include <iostream>
+	
+	
+	void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+	void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+	void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+	void processInput(GLFWwindow* window);
+	
+	// settings
+	const unsigned int SCR_WIDTH = 800;
+	const unsigned int SCR_HEIGHT = 600;
+	
+	// camera
+	Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+	float lastX = SCR_WIDTH / 2.0f;
+	float lastY = SCR_HEIGHT / 2.0f;
+	bool firstMouse = true;
+	
+	// timing
+	float deltaTime = 0.0f;
+	float lastFrame = 0.0f;
+	
+	int main()
+	{
+		// glfw: initialize and configure
+		// ------------------------------
+		glfwInit();
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	
+	#ifdef __APPLE__
+		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+	#endif
+	
+		// glfw window creation
+		// --------------------
+		GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+		if (window == NULL)
+		{
+			std::cout << "Failed to create GLFW window" << std::endl;
+			glfwTerminate();
+			return -1;
+		}
+		glfwMakeContextCurrent(window);
+		glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+		glfwSetCursorPosCallback(window, mouse_callback);
+		glfwSetScrollCallback(window, scroll_callback);
+	
+		// tell GLFW to capture our mouse
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	
+		// glad: load all OpenGL function pointers
+		// ---------------------------------------
+		if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+		{
+			std::cout << "Failed to initialize GLAD" << std::endl;
+			return -1;
+		}
+	
+		// tell stb_image.h to flip loaded texture's on the y-axis (before loading model).
+		stbi_set_flip_vertically_on_load(true);
+	
+		// configure global opengl state
+		// -----------------------------
+		glEnable(GL_DEPTH_TEST);
+	
+		// build and compile shaders
+		// -------------------------
+		Shader ourShader("anim_model_vs.glsl", "anim_model_fs.glsl");
+	
+		
+		// load models
+		// -----------
+		Model ourModel(FileSystem::getPath("resources/objects/vampire/dancing_vampire.dae"));
+		Animation danceAnimation(FileSystem::getPath("resources/objects/vampire/dancing_vampire.dae"),&ourModel);
+		Animator animator(&danceAnimation);
+	
+	
+		// draw in wireframe
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	
+		// render loop
+		// -----------
+		while (!glfwWindowShouldClose(window))
+		{
+			// per-frame time logic
+			// --------------------
+			float currentFrame = glfwGetTime();
+			deltaTime = currentFrame - lastFrame;
+			lastFrame = currentFrame;
+	
+			// input
+			// -----
+			processInput(window);
+			animator.UpdateAnimation(deltaTime);
+			
+			// render
+			// ------
+			glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	
+			// don't forget to enable shader before setting uniforms
+			ourShader.use();
+	
+			// view/projection transformations
+			glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+			glm::mat4 view = camera.GetViewMatrix();
+			ourShader.setMat4("projection", projection);
+			ourShader.setMat4("view", view);
+	
+			auto transforms = animator.GetPoseTransforms();
+			for (int i = 0; i < transforms.size(); ++i)
+				ourShader.setMat4("finalBonesTransformations[" + std::to_string(i) + "]", transforms[i]);
+	
+	
+			// render the loaded model
+			glm::mat4 model = glm::mat4(1.0f);
+			model = glm::translate(model, glm::vec3(0.0f, -0.4f, 0.0f)); // translate it down so it's at the center of the scene
+			model = glm::scale(model, glm::vec3(.5f, .5f, .5f));	// it's a bit too big for our scene, so scale it down
+			ourShader.setMat4("model", model);
+			ourModel.Draw(ourShader);
+	
+	
+			// glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
+			// -------------------------------------------------------------------------------
+			glfwSwapBuffers(window);
+			glfwPollEvents();
+		}
+	
+		// glfw: terminate, clearing all previously allocated GLFW resources.
+		// ------------------------------------------------------------------
+		glfwTerminate();
+		return 0;
+	}
+	
+	// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
+	// ---------------------------------------------------------------------------------------------------------
+	void processInput(GLFWwindow* window)
+	{
+		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+			glfwSetWindowShouldClose(window, true);
+	
+		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+			camera.ProcessKeyboard(FORWARD, deltaTime);
+		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+			camera.ProcessKeyboard(BACKWARD, deltaTime);
+		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+			camera.ProcessKeyboard(LEFT, deltaTime);
+		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+			camera.ProcessKeyboard(RIGHT, deltaTime);
+	}
+	
+	// glfw: whenever the window size changed (by OS or user resize) this callback function executes
+	// ---------------------------------------------------------------------------------------------
+	void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+	{
+		// make sure the viewport matches the new window dimensions; note that width and 
+		// height will be significantly larger than specified on retina displays.
+		glViewport(0, 0, width, height);
+	}
+	
+	// glfw: whenever the mouse moves, this callback is called
+	// -------------------------------------------------------
+	void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+	{
+		if (firstMouse)
+		{
+			lastX = xpos;
+			lastY = ypos;
+			firstMouse = false;
+		}
+	
+		float xoffset = xpos - lastX;
+		float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+	
+		lastX = xpos;
+		lastY = ypos;
+	
+		camera.ProcessMouseMovement(xoffset, yoffset);
+	}
+	
+	// glfw: whenever the mouse scroll wheel scrolls, this callback is called
+	// ----------------------------------------------------------------------
+	void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+	{
+		camera.ProcessMouseScroll(yoffset);
+	}
+	
+
+</code></pre>
 
 </html>
