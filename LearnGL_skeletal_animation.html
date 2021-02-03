@@ -556,8 +556,8 @@ private:
 	<code>Bone</code> has a constructor which reads from <code>aiNodeAnim</code> and stores keys and their timestamps to <code>mPositionKeys, mRotationKeys & mScalingKeys </code>. The main interpolation process 
 	starts from <code>Update(float animationTime)</code> which gets called every frame. This function calls respective interpolation functions for all key types and combines all final interpolation results
 	and store it to a 4x4 Matrix <code>m_LocalTransform</code>. The interpolations functions for translation & scale keys are similar but for rotation we are using <code>Slerp</code> to interpolate between quaternions.
-	Both <code>Lerp</code> & <code>Slerp</code> takes 3 arguments. First argument takes last key, second argument takes next key and third argument takes value of range 0-1,we call it scale factor here. We calculate scale
-	factor by figuring out at what point between keys animation time falls into and use the following is how we calculate this scale factor in function <code>GetScaleFactor</code>...
+	Both <code>Lerp</code> & <code>Slerp</code> takes 3 arguments. First argument takes last key, second argument takes next key and third argument takes value of range 0-1,we call it scale factor here. 
+	Let's see how we calculate this scale factor in function <code>GetScaleFactor</code>...
 
 	<p><img src="./img/guest/2020/skeletal_animation/scale_factor.png" alt="skin"></p>
 
