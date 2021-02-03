@@ -34,7 +34,7 @@
 		I won't be able to explain how the equation works because its out of the scope for now. You can surely checkout references section below to 
 		understand The Quaternion. 
 </p>
-<h3>Components of An Animated Model : Skin, Bones and Keframes</h3>
+<h3>Components of An Animated Model : Skin, Bones and Keyframes</h3>
 <p>The whole process of an animation starts with the addition of the first component which is The Skin in a software like blender or Maya. 
 	Skin is nothing but meshes which add visual aspect to the model to tell the viewer how it looks like. 
 	But If you want to move any mesh then just like the real world, you need to add Bones. You can see the images below to understand how it looks in software like blender....</p>
@@ -70,7 +70,7 @@
 <p>When we curl our forearm and we see our biceps muscle pop up. We can also say that forearm bone transformation is affecting vertices on our biceps. 
 	Similary, there could be multiple bones affecting a single vertex in a mesh. 
 	For characters like solid metal robots all forearm vertices will only be affected by forearm bone but for characters like humans, animals etc, there could be
-	 upto 4 bones which can affect a vertex.&nbsp; Let's see how assimps stores that information...</p>
+	 upto 4 bones which can affect a vertex.&nbsp; Let's see how assimp stores that information...</p>
 <p>&nbsp;</p>
 <p><img src="./img/guest/2020/skeletal_animation/assimp2.jpeg" alt="" width="760" height="860"></p>
 <p>&nbsp;</p>
@@ -340,7 +340,7 @@ private:
     <p>&nbsp;</p>
 <p>Here's high level view of classes..</p>
 
-<p><img src="./img/guest/2020/skeletal_animation/bird_eye_view.png" alt="" width="100" height="100"></p>
+<p><img src="./img/guest/2020/skeletal_animation/bird_eye_view.png" alt="" width="500" height="500"></p>
 
 <p>  Let us remind ourselves what we are trying to achieve. For each rendering frame we want to interpolate all bones in heirarchy smoothly and get their final transformations matrices which will be supplied to shader
 	uniform <code>finalBonesMatrices</code>.
@@ -555,8 +555,8 @@ private:
 	We start by creating 3 structs for our key types. Each struct holds a value and a time stamp. Timestamp tells us at what point of an animation we need to interpolate to its value. 
 	<code>Bone</code> has a constructor which reads from <code>aiNodeAnim</code> and stores keys and their timestamps to <code>mPositionKeys, mRotationKeys & mScalingKeys </code>. The main interpolation process 
 	starts from <code>Update(float animationTime)</code> which gets called every frame. This function calls respective interpolation functions for all key types and combines all final interpolation results
-	and store it to <code>m_LocalTransform</code>. The interpolations functions for translation & scale keys are similar but for rotation we are using <code>Slerp</code> to interpolate between quaternions.
-	Both <code>Lerp</code> & <code>Slerp</code> takes 3 arguments. First argument takes last key, second argument takes next key and 3 argument takes value of range 0-1,which is we call scale factor here. We calculate scale
+	and store it to a 4x4 Matrix <code>m_LocalTransform</code>. The interpolations functions for translation & scale keys are similar but for rotation we are using <code>Slerp</code> to interpolate between quaternions.
+	Both <code>Lerp</code> & <code>Slerp</code> takes 3 arguments. First argument takes last key, second argument takes next key and third argument takes value of range 0-1,we call it scale factor here. We calculate scale
 	factor by figuring out at what point between keys animation time falls into and use the following is how we calculate this scale factor in function <code>GetScaleFactor</code>...
 
 	<p><img src="./img/guest/2020/skeletal_animation/scale_factor.png" alt="skin"></p>
@@ -675,7 +675,7 @@ private:
 
    </code></pre>
 
-  <p> Here, creation of an  <code>Animation</code> object starts with a constructor. It takes two arguments. First path to the animation file & second parameter is the <code>Model</code> for this animation. 
+  <p> Here, creation of an  <code>Animation</code> object starts with a constructor. It takes two arguments. First, path to the animation file & second parameter is the <code>Model</code> for this animation. 
 You will see later ahead why we need this <code>Model</code> reference here. We then create an <code>Assimp::Importer</code> to read the animation file, followed by an <code>assert</code> check which will throw
 an error if animation could not be found. Then we read general animation data like how long is this animation which is <code>mDuration</code> and the animation speed represented by <code>mTicksPerSecond</code>.
 We then call <code>ReadHeirarchyData</code> which replicates <code>aiNode</code> heirarchy of Assimp and creates heirarchy of <code>AssimpNodeData</code>. 
@@ -683,7 +683,7 @@ We then call <code>ReadHeirarchyData</code> which replicates <code>aiNode</code>
 
 <p> Then we call a function called <code>ReadMissingBones</code>. I had to write this function because sometimes when I loaded FBX model separately, it had some bones missing and I found those missing bones in
 the animation file. This function reads the missing bones information and stores their information in <code>m_BoneInfoMap</code> of <code>Model</code> and saves a reference of <code>m_BoneInfoMap</code> locally in
-m_BoneInfoMap.</p> 
+the m_BoneInfoMap.</p> 
 
 <p>And we have our animation ready. Now let's look at our final stage, The Animator class...</p>
 
